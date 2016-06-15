@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+# fail fast
+set -e
+
+BP_DIR=$(cd $(dirname $0)/..; pwd) # absolute path
+BIN_DIR=$BP_DIR/bin
+
+# parse args
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+
+#export_env_dir $ENV_DIR
+
+JVM_COMMON_BUILDPACK=${JVM_COMMON_BUILDPACK:-"https://codon-buildpacks.s3.amazonaws.com/buildpacks/heroku/jvm-common.tgz"}
+mkdir -p /tmp/jvm-common
+curl --retry 3 --silent --location $JVM_COMMON_BUILDPACK | tar xzm -C /tmp/jvm-common --strip-components=1
+. /tmp/jvm-common/bin/util
+. /tmp/jvm-common/bin/java
+
+install_java_with_overlay ${BUILD_DIR}
+
+WILDFLY_VERSION="10.0.0.Final"
+WILDFLY_SHA1="c0dd7552c5207b0d116a9c25eb94d10b4f375549"
+JBOSS_HOME=".jboss/wildfly-${WILDFLY_VERSION}"
+
+cd $BUILD_DIR
+
+mkdir -p .jboss
+
+echo "Installing Wildfly ${WILDFLY_VERSION}..."
+if [ -f $CACHE_DIR/wildfly-$WILDFLY_VERSION.tar.gz ]; then
+  mv $CACHE_DIR/wildfly-$WILDFLY_VERSION.tar.gz wildfly-$WILDFLY_VERSION.tar.gz
+else
+  curl --retry 3 -s -O https://download.jboss.org/wildfly/$WILDFLY_VERSION/wildfly-$WILDFLY_VERSION.tar.gz
+  echo "Done installing"
+  sha1sum wildfly-$WILDFLY_VERSION.tar.gz | grep $WILDFLY_SHA1
+fi
+
+tar xf wildfly-$WILDFLY_VERSION.tar.gz
+mv wildfly-$WILDFLY_VERSION $JBOSS_HOME
+#mv wildfly-$WILDFLY_VERSION.tar.gz ${CACHE_DIR}/wildfly-$WILDFLY_VERSION.tar.gz
+rm wildfly-$WILDFLY_VERSION.tar.gz
+
+echo "Deploying war file..."
+cp *.war $JBOSS_HOME/standalone/deployments/
+
+#cat << EOF > $BUILD_DIR/Procfile
+#web: ${JBOSS_HOME}/bin/standalone.sh -b 0.0.0.0 -p \$PORT
+#EOF
+
+cat << EOF > $BUILD_DIR/.profile.d/jboss.sh
+export JBOSS_HOME=${JBOSS_HOME}
+EOF
+
+echo "Done"
