@@ -12,8 +12,6 @@ BUILD_DIR=$1
 CACHE_DIR=$2
 ENV_DIR=$3
 
-#export_env_dir $ENV_DIR
-
 JVM_COMMON_BUILDPACK=${JVM_COMMON_BUILDPACK:-"https://codon-buildpacks.s3.amazonaws.com/buildpacks/heroku/jvm-common.tgz"}
 mkdir -p /tmp/jvm-common
 curl --retry 3 --silent --location $JVM_COMMON_BUILDPACK | tar xzm -C /tmp/jvm-common --strip-components=1
@@ -30,29 +28,27 @@ cd $BUILD_DIR
 
 mkdir -p .jboss
 
-echo "Installing Wildfly ${WILDFLY_VERSION}..."
-if [ -f $CACHE_DIR/wildfly-$WILDFLY_VERSION.tar.gz ]; then
-  mv $CACHE_DIR/wildfly-$WILDFLY_VERSION.tar.gz wildfly-$WILDFLY_VERSION.tar.gz
-else
-  curl --retry 3 -s -O https://download.jboss.org/wildfly/$WILDFLY_VERSION/wildfly-$WILDFLY_VERSION.tar.gz
-  echo "Done installing"
-  sha1sum wildfly-$WILDFLY_VERSION.tar.gz | grep $WILDFLY_SHA1
-fi
-
+echo -n "-----> Installing Wildfly ${WILDFLY_VERSION}... "
+curl --retry 3 -s -O https://download.jboss.org/wildfly/$WILDFLY_VERSION/wildfly-$WILDFLY_VERSION.tar.gz
+sha1sum wildfly-$WILDFLY_VERSION.tar.gz | grep $WILDFLY_SHA1 > /dev/null 2>&1
 tar xf wildfly-$WILDFLY_VERSION.tar.gz
 mv wildfly-$WILDFLY_VERSION $JBOSS_HOME
-#mv wildfly-$WILDFLY_VERSION.tar.gz ${CACHE_DIR}/wildfly-$WILDFLY_VERSION.tar.gz
 rm wildfly-$WILDFLY_VERSION.tar.gz
+echo "done"
 
-echo "Deploying war file..."
-cp *.war $JBOSS_HOME/standalone/deployments/
+echo -n "-----> Deploying war file(s)... "
+cp target/*.war $JBOSS_HOME/standalone/deployments/
+echo "done"
 
-#cat << EOF > $BUILD_DIR/Procfile
-#web: ${JBOSS_HOME}/bin/standalone.sh -b 0.0.0.0 -p \$PORT
-#EOF
+echo "-----> Creating configuration..."
+if [ -f $BUILD_DIR/Procfile ]; then
+  echo "        - Using existing process types"
+else
+  cat << EOF > $BUILD_DIR/Procfile
+web: \$JBOSS_HOME/bin/standalone.sh -b=0.0.0.0 -Djboss.http.port=\$PORT
+EOF
+fi
 
 cat << EOF > $BUILD_DIR/.profile.d/jboss.sh
 export JBOSS_HOME=${JBOSS_HOME}
 EOF
-
-echo "Done"
