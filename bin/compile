@@ -36,6 +36,9 @@ mv wildfly-$WILDFLY_VERSION $JBOSS_HOME
 rm wildfly-$WILDFLY_VERSION.tar.gz
 echo "done"
 
+echo -n "-----> Installing standalone.xml... "
+cp $BP_DIR/etc/standalone.xml $JBOSS_HOME/standalone/configuration/standalone.xml
+
 echo -n "-----> Deploying war file(s)... "
 cp target/*.war $JBOSS_HOME/standalone/deployments/
 echo "done"
